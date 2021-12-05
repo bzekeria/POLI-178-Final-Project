@@ -1,0 +1,217 @@
+---
+title: 'POLI 178: Afghanistan Military Spending EDA + Statistical Inference'
+author: "Baraa Zekeria"
+date: "December 2, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Afghanistan: Military Expenditure as Share of GDP
+
+  - The effect of US intervention on Afghanistan's military spending
+  - Military spending is intimately linked to war. In times of peace, few countries spend more than 5% of
+  GDP on their military, choosing instead to maintain their capabilities and make use of their armies in 
+  other ways.
+
+ [Our World Data - Violence and War](https://ourworldindata.org/military-spending)
+ 
+# Clear Environment
+
+```{r}
+rm(list=ls(all=TRUE))
+```
+
+# Load Package 
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(sjPlot)
+library(vtable)
+library(broom)
+library(stargazer)
+```
+
+# Load Data
+
+```{r message=FALSE, warning=FALSE}
+mil_exp <- read_csv("military-expenditure-as-share-of-gdp.csv")
+```
+
+# View Data
+
+```{r}
+glimpse(mil_exp)
+```
+
+```{r}
+colnames(mil_exp)
+```
+
+# Data Cleaning
+
+# Change the **class()** of the ```Year``` and ```pct_gdp``` columns
+
+```{r}
+mil_exp$Year <- as.numeric(mil_exp$Year)
+mil_exp$pct_gdp <- as.numeric(mil_exp$pct_gdp)
+```
+
+## Confirm the data type changes
+
+```{r}
+class(mil_exp$Year)
+
+class(mil_exp$pct_gdp)
+```
+
+
+
+## Drop the ```code``` column given its redundance for this analysis
+
+```{r}
+mil_exp <- subset(mil_exp, select = -c(Code))
+```
+
+### Confirm the drop by calling the **colnames()** function
+
+```{r}
+colnames(mil_exp)
+```
+
+
+## Subset the DF to only include where the ```Entity``` is ```Afghanistan```  and re-assign it to the ```mil_exp``` object
+
+```{r}
+mil_exp <- mil_exp %>%
+  filter(Entity == "Afghanistan")
+```
+
+## Create a new column, ```intervention_type```, given the ```Year``` values
+
+```{r}
+mil_exp$intervention_type <- ifelse(mil_exp$Year >= 2001, "Post-US Intervention", "Pre-US Intervention")
+```
+
+
+# Summary Statistics 
+
+## Since the focus of this project is related to US intervention of analysis starting in 2001, find the diifference in means for ```pct_GDP```
+
+```{r}
+# Filter to 2 separate DF's
+pre_us <- mil_exp %>%
+  filter(Year < 2001) 
+
+post_us <- mil_exp %>%
+  filter(Year >= 2001) 
+```
+
+```{r warning=FALSE}
+# Calculate the means
+avg_pct_gdp <- mean(mil_exp$pct_gdp)
+
+pre_us_avg_pct_gdp <- mean(pre_us$pct_gdp)
+
+post_us_avg_pct_gdp <- mean(post_us$pct_gdp)
+
+```
+
+  - Means
+    - Overall: `r avg_pct_gdp`%
+    - Pre-US (< 2001): `r pre_us_avg_pct_gdp`%
+    - Post-US (>= 2001): `r post_us_avg_pct_gdp`%
+    - Difference: `r pre_us_avg_pct_gdp - post_us_avg_pct_gdp`%
+
+```{r}
+st(mil_exp, vars = c("Year", "pct_gdp"))
+```
+
+
+# Visualization
+
+```{r}
+mean_gdp <- mil_exp %>% 
+  group_by(intervention_type) %>%
+  summarise(mean_gdp_rate = mean(pct_gdp, na.rm = TRUE))
+
+mean_gdp
+```
+
+
+```{r}
+mil_exp %>% 
+  group_by(intervention_type) %>%
+  summarise(mean_gdp_rate = mean(pct_gdp, na.rm = TRUE)) %>%
+  ggplot(aes(intervention_type, mean_gdp_rate, fill = intervention_type)) +
+  geom_bar(stat ="identity") + 
+  scale_x_discrete(limits = c("Pre-US Intervention", "Post-US Intervention")) +
+  labs(title = "Average Afghanistan Military Expenditure (% of GDP) by Intervention
+      Type", x = "Year", y = "Average Military Expenditure (% of GDP)",
+      caption = "Source: Our World in Data")
+```
+
+The average military expenditure for *Pre-US Intervention* is 1.81% and *Post-US Intervention* is 1.61%.
+
+```{r}
+ggplot(data = mil_exp, 
+       aes(x = Year, 
+           y = pct_gdp, 
+           color = intervention_type)) +
+  geom_point() +
+  geom_smooth(method = lm, se = F) + 
+  geom_line() + 
+  labs(title = "Afghanistan Military Expenditure (% of GDP) by Year",
+       x = "Year",
+       y = "Military Expenditure (% of GDP)",
+       caption = "Source: Our World in Data")
+```
+
+Before the US intervention on Afghanistan, we notice a roughly positive correlation in military spending from 1970-1977. The, from 2004-2009, during that 6 year period, we see an up and down trend with military spending. Though the data changes, come 2010, where military spending continuously decreases from ~ 1.9% - 1.1 %. We see a slight increase in 2014 and 2018, 1.08% to 1.30% and 0.95% to 1.01%, respectively.
+
+*Note: Data was not taken into account from 1978-2003*
+
+# Statistical Inference
+
+```{r}
+# Save the GDP values in an array
+pre_us_vals <- pre_us$pct_gdp
+
+post_us_vals <- post_us$pct_gdp
+```
+
+```{r}
+# T-Test Difference in Means
+tt <- t.test(as.numeric(pre_us_vals), as.numeric(post_us_vals))
+
+tidy(tt)
+```
+
+```{r}
+# Overall
+lm_overall <- lm(pct_gdp ~ Year, data = mil_exp)
+
+lm_overall
+```
+
+```{r message=FALSE, warning=FALSE}
+# Pre-US Intervention
+lm_pre <- lm(filter(mil_exp, intervention_type == "Pre-US Intervention")$pct_gdp ~ filter(mil_exp, intervention_type == "Pre-US Intervention")$pct_gdp)
+
+lm_pre
+```
+
+```{r message=FALSE, warning=FALSE}
+# Post-US Intervention
+lm_post <- lm(filter(mil_exp, intervention_type == "Post-US Intervention")$pct_gdp ~ filter(mil_exp, intervention_type == "Post-US Intervention")$pct_gdp)
+
+lm_post
+```
+
+```{r message=FALSE, warning=FALSE}
+# Combine the linear regression models
+stargazer(lm_overall, lm_pre, lm_post, type = "html", dep.var.labels = c("Overall", "Pre-US Intervention", "Post- US Intervention"), title = "Linear Regressions", out = "mil_regressions.htm")
+```
+
